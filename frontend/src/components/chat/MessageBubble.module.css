@@ -1,0 +1,297 @@
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 92%;
+  margin-bottom: 10px;
+}
+
+.rowUser {
+  align-self: flex-end;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.rowBobby {
+  align-self: flex-start;
+  margin-right: auto;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #00473C;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+  box-shadow: 0 2px 5px rgba(0, 71, 60, 0.15);
+}
+
+.bubble {
+  padding: 12px 15px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  position: relative;
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  width: 100%;
+}
+
+.bubbleUser {
+  background: #00473C;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.bubbleBobby {
+  background: #ffffff;
+  border: 1.5px solid #eae6db;
+  color: #1c2e2a;
+  border-bottom-left-radius: 4px;
+}
+
+.markdownContent p {
+  margin: 0 0 6px;
+}
+
+.markdownContent p:last-child {
+  margin-bottom: 0;
+}
+
+.markdownContent strong {
+  font-weight: 700;
+  color: inherit;
+}
+
+.markdownContent ul, .markdownContent ol {
+  padding-left: 18px;
+  margin: 6px 0;
+}
+
+.markdownContent li {
+  margin-bottom: 3px;
+}
+
+.markdownContent blockquote {
+  border-left: 3px solid #00473C;
+  padding: 4px 10px;
+  margin: 6px 0;
+  background: rgba(0, 71, 60, 0.05);
+  border-radius: 0 6px 6px 0;
+  color: #2d3748;
+  font-size: 12.5px;
+}
+
+.markdownContent table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.markdownContent th, .markdownContent td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.markdownContent th {
+  background: #edf2f7;
+  font-weight: 700;
+  color: #4a5568;
+}
+
+.markdownContent hr {
+  border: none;
+  border-top: 1px dashed #cbd5e1;
+  margin: 8px 0;
+}
+
+.markdownContent code {
+  background: rgba(0, 71, 60, 0.08);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-family: monospace;
+}
+
+/* === EMBEDDED DRAFT ACTION BUTTONS === */
+.actionContainer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.buttonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.btnConfirm {
+  background: #00473C;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 71, 60, 0.2);
+  transition: all 0.15s ease;
+}
+
+.btnConfirm:hover {
+  background: #00372f;
+  transform: translateY(-1px);
+}
+
+.btnEdit {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 18px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnEdit:hover {
+  border-color: #00473C;
+  color: #00473C;
+}
+
+.btnCancel {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  padding: 6px 10px;
+  border-radius: 18px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnCancel:hover {
+  background: #fef2f2;
+}
+
+/* === INLINE EDIT FORM === */
+.editCard {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.editTitle {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #00473C;
+  margin: 0;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.formLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.formInput, .formSelect, .formTextarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  color: #0f172a;
+  background: #ffffff;
+  outline: none;
+  font-family: inherit;
+}
+
+.formInput:focus, .formSelect:focus, .formTextarea:focus {
+  border-color: #00473C;
+}
+
+.editActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btnEditCancel {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.intentTag {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(0, 71, 60, 0.08);
+  color: #00473C;
+  border: 1px solid rgba(0, 71, 60, 0.15);
+}
+
+.timestamp {
+  display: block;
+  font-size: 9.5px;
+  color: #a0aec0;
+  margin-top: 5px;
+  text-align: right;
+}
+
+.system {
+  align-self: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4a5568;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 5px 14px;
+  margin: 8px auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}

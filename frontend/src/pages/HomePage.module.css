@@ -1,0 +1,142 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: calc(100vh - 70px);
+  background: #f4f1ea;
+  padding: 40px 24px;
+  justify-content: center;
+  align-items: center;
+}
+
+.heroSection {
+  display: flex;
+  max-width: 1100px;
+  width: 100%;
+  gap: 60px;
+  align-items: center;
+  animation: fadeInUp 0.4s ease;
+}
+
+.illCol {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.illustrationCard {
+  background: #0b3025;
+  border-radius: 24px;
+  padding: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 320px;
+  height: 320px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.contentCol {
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.subText {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #00473C;
+  letter-spacing: 1px;
+  font-family: var(--font-family);
+}
+
+.mainTitle {
+  font-size: 42px;
+  font-weight: 700;
+  color: #00473C;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+}
+
+.descText {
+  font-size: 16px;
+  color: #4a5568;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.featureItem {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.featureIcon {
+  background: #00473C;
+  color: #eae6db;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 71, 60, 0.15);
+}
+
+.featureTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #00473C;
+  margin-bottom: 2px;
+}
+
+.featureDesc {
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.4;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 868px) {
+  .heroSection {
+    flex-direction: column;
+    gap: 40px;
+    text-align: center;
+  }
+  
+  .contentCol {
+    align-items: center;
+  }
+  
+  .featureItem {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+
+  .mainTitle {
+    font-size: 32px;
+  }
+}

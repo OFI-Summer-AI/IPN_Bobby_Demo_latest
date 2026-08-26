@@ -1,0 +1,257 @@
+.container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.formPane {
+  flex: 1.1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: #ffffff;
+}
+
+.formContainer {
+  width: 100%;
+  max-width: 420px;
+  animation: fadeInUp 0.4s ease;
+}
+
+.logoWrapper {
+  margin-bottom: 50px;
+}
+
+.welcomeHeader {
+  margin-bottom: 35px;
+}
+
+.title {
+  font-size: 36px;
+  font-weight: 700;
+  color: #00473C;
+  font-family: Georgia, 'Times New Roman', serif;
+  margin-bottom: 10px;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: #4a5568;
+}
+
+.brandLink {
+  color: #00473C;
+  text-decoration: underline;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #00473C;
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 14px;
+  font-size: 16px;
+  color: #718096;
+}
+
+.input {
+  width: 100%;
+  padding: 13px 14px 13px 42px;
+  border: 1.5px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  background: #ffffff;
+  color: #1a202c;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.input:focus {
+  border-color: #00473C;
+  box-shadow: 0 0 0 3px rgba(0, 71, 60, 0.15);
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  outline: none;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.formMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.rememberMe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: #4a5568;
+}
+
+.rememberMe input {
+  width: 16px;
+  height: 16px;
+  accent-color: #00473C;
+  cursor: pointer;
+}
+
+.checkboxLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.forgotLink {
+  font-size: 14px;
+  color: #00473C;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.submitBtn {
+  width: 100%;
+  padding: 13px;
+  background: #00473C;
+  color: #ffffff;
+  border: none;
+  border-radius: 30px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  margin-top: 10px;
+}
+
+.submitBtn:hover {
+  background: #003b32;
+}
+
+.divider {
+  margin-top: 40px;
+  position: relative;
+  text-align: center;
+}
+
+.divider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 1px;
+  background: #e2e8f0;
+  z-index: 1;
+}
+
+.divider span {
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #a0aec0;
+  letter-spacing: 1px;
+}
+
+.imagePane {
+  flex: 0.9;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 60px;
+}
+
+.imagePane::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 71, 60, 0.25) 0%, rgba(0, 0, 0, 0.1) 100%);
+  pointer-events: none;
+}
+
+.imageOverlay {
+  position: relative;
+  z-index: 2;
+}
+
+.heroTitle {
+  font-size: 42px;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.heroSubtitle {
+  font-size: 18px;
+  color: #eae6db;
+  font-weight: 400;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 868px) {
+  .imagePane {
+    display: none;
+  }
+  .formPane {
+    flex: 1;
+    padding: 24px;
+  }
+}
