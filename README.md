@@ -104,7 +104,7 @@ For full architecture details see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | LLM (prod) | Azure OpenAI |
 | DB (demo) | Supabase PostgreSQL |
 | DB (prod) | Azure PostgreSQL |
-| Vector Search (demo) | Supabase pgvector |
+| Knowledge Search (demo) | Supabase pgvector with ranked lexical fallback |
 | Vector Search (prod) | Azure AI Search |
 | ITSM | Freshdesk API v2 |
 | Observability | Langfuse |

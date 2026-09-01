@@ -3,12 +3,14 @@ Bobby - Knowledge Node (RAG, Greetings, Gestures & Observability)
 """
 from __future__ import annotations
 import datetime
+import re
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from agent.state import TicketState
 from config.settings import settings
 from integrations.search_client import get_search_client
 from integrations.observability import observe_node
+from text_utils import extract_message_text, normalize_query
 
 logger = structlog.get_logger(__name__)
 
@@ -16,13 +18,44 @@ SYNTHESIS_PROMPT = """You are Bobby, an IT support assistant for Inspired Pet Nu
 Answer the user question using the provided IT knowledge base context below.
 Be concise, professional, and include numbered steps where applicable.
 If context is insufficient, offer to create a support ticket.
+Do not use outside knowledge or invent steps that are absent from the context.
+Mention the title or source of the guide used for the answer.
 
 Knowledge Base Context:
 {context}
 """
 
+_CONTEXTUAL_FOLLOW_UP = re.compile(
+    r"\b(it|that|this|those|still|again|same|after|before|step|didn't|doesn't|not fixed)\b",
+    re.IGNORECASE,
+)
+_SEARCH_CONTEXT_TERMS = (
+    "vpn", "wifi", "network", "password", "account", "mfa", "teams", "outlook",
+    "email", "printer", "laptop", "monitor", "software", "access", "sharepoint",
+    "onedrive", "dynamics", "malware", "phishing", "windows", "certificate",
+)
 
-def _get_time_aware_greeting(user_query: str = "", user_time_greeting: str = None) -> str:
+
+def build_search_query(state: TicketState, user_query: str) -> str:
+    """Expand a vague follow-up with the most recent relevant user query."""
+    normalized_query = normalize_query(user_query)
+    if not _CONTEXTUAL_FOLLOW_UP.search(normalized_query) or any(
+        term in normalized_query for term in _SEARCH_CONTEXT_TERMS
+    ):
+        return user_query
+
+    messages = list(state.get("messages") or [])
+    for message in reversed(messages[:-1]):
+        message_type = getattr(message, "type", getattr(message, "role", ""))
+        if message_type not in ("human", "user", ""):
+            continue
+        content = str(getattr(message, "content", "")).strip()
+        if content and any(term in normalize_query(content) for term in _SEARCH_CONTEXT_TERMS):
+            return f"{content}\nFollow-up detail: {user_query}"
+    return user_query
+
+
+def _get_time_aware_greeting(user_query: str = "", user_time_greeting: str | None = None) -> str:
     """Returns time-sensitive greeting based on client local time or query context."""
     if user_time_greeting and user_time_greeting.strip():
         clean_g = user_time_greeting.strip().capitalize()
@@ -81,17 +114,43 @@ def _format_rag_answer(docs: list[dict], user_query: str) -> str:
     return "\n".join(response_lines)
 
 
+def _valid_evidence(docs: list[dict]) -> list[dict]:
+    """Remove empty and duplicate retrieval records before answer generation."""
+    accepted = []
+    seen = set()
+    for doc in docs:
+        title = str(doc.get("title", "")).strip()
+        content = str(doc.get("content", "")).strip()
+        identity = str(doc.get("id") or f"{title}:{content[:80]}")
+        if not title or not content or identity in seen:
+            continue
+        seen.add(identity)
+        accepted.append(doc)
+    return accepted
+
+
 @observe_node(name="knowledge_node")
 async def knowledge_node(state: TicketState) -> dict:
     """Retrieves relevant KB articles and synthesises a grounded response."""
     logger.info("knowledge_node.start", user_id=state.get("user_id"))
 
-    user_query = state["messages"][-1].content if state.get("messages") else ""
+    raw_query = state["messages"][-1].content if state.get("messages") else ""
+    user_query = extract_message_text(raw_query)
     intent = state.get("intent", "it_question")
     q_lower = user_query.strip().lower()
 
     # 1. Guardrail Refusal
     if intent == "guardrail_refusal":
+        if state.get("scope") == "unsafe":
+            msg = (
+                "🛡️ **I can’t help with that request.**\n\n"
+                "I can assist with legitimate workplace IT support and cybersecurity incident "
+                "reporting, but I can’t provide harmful instructions, bypass safeguards, or expose "
+                "protected system information.\n\n"
+                "If you are reporting a suspected security incident, describe what you observed "
+                "and I’ll help you raise it with IT."
+            )
+            return {"retrieved_docs": [], "knowledge_answer": msg, "final_response": msg}
         msg = (
             "🛡️ **Out of Scope Request**\n\n"
             "I am Bobby, the AI Service Management Assistant at Inspired Pet Nutrition, dedicated strictly to **IT Systems and Technical Support**.\n\n"
@@ -159,21 +218,47 @@ async def knowledge_node(state: TicketState) -> dict:
         return {"retrieved_docs": [], "knowledge_answer": msg, "final_response": msg}
 
     # 7. RAG Retrieval from IT Knowledge Base
+    search_query = build_search_query(state, user_query)
     search_client = get_search_client()
+    search_failed = False
     try:
-        docs = await search_client.search(query=user_query, top_k=3)
+        docs = await search_client.search(query=search_query, top_k=3)
+        docs = _valid_evidence(docs)
+        logger.info(
+            "search.completed",
+            provider=type(search_client).__name__,
+            result_count=len(docs),
+            top_score=docs[0].get("score") if docs else None,
+            query_rewritten=search_query != user_query,
+        )
     except Exception as e:
         logger.error("knowledge_node.search_error", error=str(e))
         docs = []
+        search_failed = True
 
-    # 8. LLM Synthesis or Grounded Template
+    # 8. Never ask the LLM to answer without retrieved evidence.
+    if not docs:
+        if search_failed:
+            rag_answer = (
+                "Our IT knowledge service is temporarily unavailable. "
+                "Please try again shortly, or type **'create ticket'** for immediate assistance."
+            )
+        else:
+            rag_answer = _format_rag_answer([], user_query)
+        return {
+            "retrieved_docs": [],
+            "knowledge_answer": rag_answer,
+            "final_response": rag_answer,
+        }
+
+    # 9. LLM Synthesis or Grounded Template
     api_key = settings.llm_api_key
     if api_key and api_key.strip() != "" and "TODO" not in api_key:
         try:
             from integrations.llm_client import get_llm
             llm = get_llm()
             context = "\n\n".join([
-                f"[{doc.get('title', 'Guide')}]\n{doc.get('content', '')}"
+                f"[{doc.get('title', 'Guide')} | Source: {doc.get('source', 'IT Knowledge Base')}]\n{doc.get('content', '')}"
                 for doc in docs
             ])
             response = await llm.ainvoke([

@@ -20,6 +20,16 @@ from middleware.auth import create_demo_token
 token = create_demo_token("helpdesk-001")
 ```
 
+### `POST /auth/login`
+Maps an email address to a demo role and returns a signed bearer token. This endpoint is for the
+demo login flow; production authentication uses the configured identity provider.
+
+```json
+{
+  "email": "employee@example.com"
+}
+```
+
 ---
 
 ## CQRS Pattern
@@ -107,6 +117,22 @@ Triggers an account action (unlock or password reset) through Bobby graph.
 ```
 
 Valid `action` values: `"unlock"` | `"password_reset"`
+
+---
+
+### `POST /commands/tickets/resolve`
+Marks a Freshdesk ticket as resolved, adds a private resolution note, and dispatches the configured
+resolution email.
+
+```json
+{
+  "ticket_id": "12345",
+  "resolution_notes": "VPN access restored after profile reset.",
+  "resolved_by": "IT Helpdesk Specialist",
+  "recipient_email": "employee@example.com",
+  "recipient_name": "Employee"
+}
+```
 
 ---
 

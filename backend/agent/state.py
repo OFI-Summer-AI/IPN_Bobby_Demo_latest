@@ -35,6 +35,9 @@ class TicketState(TypedDict):
                             # | "account_unlock" | "password_reset" | "out_of_scope"
     confidence: float       # 0.0 - 1.0
     raw_intent_response: str
+    active_intent: str | None       # ongoing valid task; refusals do not overwrite it
+    previous_valid_intent: str | None
+    scope: str | None               # in_scope | out_of_scope | unsafe | unknown
 
     # ── Knowledge retrieval ───────────────────────────────────────────────────
     retrieved_docs: list[dict]

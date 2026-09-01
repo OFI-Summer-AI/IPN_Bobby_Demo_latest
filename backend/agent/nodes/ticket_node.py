@@ -18,6 +18,7 @@ from integrations.freshdesk_client import get_freshdesk_client
 from integrations.email_service import send_ticket_created_email, send_ticket_resolved_email
 from agent.services.auto_resolver import auto_resolve_ticket_background
 from config.settings import settings
+from text_utils import extract_message_text
 
 logger = structlog.get_logger(__name__)
 
@@ -111,7 +112,7 @@ def _smart_classify_from_message(user_message: str) -> dict:
     }
 
 
-def _format_draft_card(ticket: dict, ticket_number: str = None) -> str:
+def _format_draft_card(ticket: dict, ticket_number: str | None = None) -> str:
     """Formats a clear ticket draft card for user review."""
     priority_icons = {
         "low": "🟢 Low",
@@ -156,7 +157,8 @@ async def ticket_node(state: TicketState) -> dict:
     logger.info("ticket_node.start", intent=state.get("intent"))
 
     intent = state.get("intent")
-    user_message = state["messages"][-1].content
+    raw_message = state["messages"][-1].content if state.get("messages") else ""
+    user_message = extract_message_text(raw_message)
     user_message_lower = user_message.lower()
 
     # 1. In-Chat Ticket Resolution (Agent / Admin)
@@ -199,9 +201,14 @@ async def ticket_node(state: TicketState) -> dict:
                 try:
                     t = await freshdesk.get_ticket(spec_id)
                     status_map = {2: "Open", 3: "Pending", 4: "Resolved", 5: "Closed"}
-                    status_str = status_map.get(t.get("status"), str(t.get("status", "In Progress")))
+                    status_val = t.get("status")
+                    status_key = int(status_val) if isinstance(status_val, int) or (isinstance(status_val, str) and status_val.isdigit()) else None
+                    status_str = status_map.get(status_key, str(status_val or "In Progress")) if status_key is not None else str(status_val or "In Progress")
+
                     priority_map = {1: "🟢 Low", 2: "🟡 Medium", 3: "🟠 High", 4: "🔴 Urgent (P1)"}
-                    priority_str = priority_map.get(t.get("priority"), "Medium")
+                    priority_val = t.get("priority")
+                    priority_key = int(priority_val) if isinstance(priority_val, int) or (isinstance(priority_val, str) and priority_val.isdigit()) else None
+                    priority_str = priority_map.get(priority_key, "Medium") if priority_key is not None else "Medium"
 
                     return {
                         "ticket_details": {"ticket": t},
@@ -372,7 +379,7 @@ async def ticket_node(state: TicketState) -> dict:
             response = await llm.ainvoke([
                 SystemMessage(content=SLOT_FILLING_PROMPT.format(message=user_message)),
             ])
-            ticket_fields = json.loads(response.content)
+            ticket_fields = json.loads(extract_message_text(response.content))
         except Exception as e:
             logger.error("ticket_node.slot_fill_error", error=str(e))
             ticket_fields = _smart_classify_from_message(user_message)

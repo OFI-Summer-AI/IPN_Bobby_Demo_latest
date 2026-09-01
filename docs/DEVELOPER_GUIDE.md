@@ -245,7 +245,7 @@ interface Message { ... }  // don't define in component file
 
 To add a new use case (e.g., "order laptop"):
 
-1. **Add intent to triage** — add the new intent to `VALID_INTENTS` in `triage.py` and update the system prompt
+1. **Add intent to triage** — add the intent to `VALID_INTENTS` and the deterministic precedence rules in `triage.py`; intent classification must not call an LLM
 2. **Add node** — create `backend/agent/nodes/laptop_order_node.py`
 3. **Add edge** — wire the node into `graph.py` with `add_node()` and `add_conditional_edges()`
 4. **Add tools** — if it needs a new API, add to `agent/tools/`
@@ -283,8 +283,8 @@ Access Langfuse dashboard at `https://cloud.langfuse.com` (or your self-hosted U
 What is traced per invocation:
 - Full message history
 - Each node's input/output
-- LLM call latency and token usage
-- Intent classification result
+- LLM call latency and token usage when an LLM is used for grounded answer synthesis or ticket field extraction
+- Deterministic intent and scope classification result
 - HITL decisions
 
 ---

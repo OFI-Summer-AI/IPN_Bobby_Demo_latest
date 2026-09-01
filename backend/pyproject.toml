@@ -18,7 +18,12 @@ ignore = ["E501"]
 known-first-party = ["agent", "api", "config", "integrations", "middleware"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 python_files = "test_*.py"
 python_functions = "test_*"
+
+[tool.pyright]
+include = ["."]
+extraPaths = ["."]

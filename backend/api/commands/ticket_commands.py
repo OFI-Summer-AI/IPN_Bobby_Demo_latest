@@ -7,15 +7,22 @@ Contact info (name/email/phone) is collected in a simple in-memory session store
 """
 from __future__ import annotations
 from integrations.email_service import send_escalation_email
-import re
+import time
+import hashlib
+import json
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from langchain_core.messages import HumanMessage
 from agent.graph import get_bobby_graph, build_bobby_graph
-from agent.nodes.triage import _BAD_INTENT_PATTERNS
-import re
+from agent.nodes.triage import (
+    CONFIRM_WORDS,
+    classify_scope,
+    is_explicit_ticket_request,
+    is_workflow_interruption,
+)
+from text_utils import extract_email, extract_phone, is_valid_contact_name
 from middleware.auth import get_current_user
 from config.settings import settings
 
@@ -24,9 +31,8 @@ router = APIRouter(prefix="/commands")
 
 _sessions: dict[str, dict] = {}
 _fallback_graph = None
-_EMAIL_RE = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
-_PHONE_RE = re.compile(r"[\+]?[\d\s\-\(\)]{7,15}")
-_CONFIRM_WORDS = {"yes", "y", "sure", "please", "yes please", "ok", "okay", "confirm", "yep", "yup"}
+_SESSION_TTL_SECONDS = 30 * 60
+_MAX_SESSIONS = 1000
 
 CONTACT_STEPS = [
     ("contact_name",  "Before I create the ticket, could you please tell me your **full name**?"),
@@ -36,6 +42,17 @@ CONTACT_STEPS = [
 
 
 def _get_sess(sid: str) -> dict:
+    now = time.monotonic()
+    expired = [
+        session_id
+        for session_id, data in _sessions.items()
+        if now - data.get("last_activity", now) > _SESSION_TTL_SECONDS
+    ]
+    for session_id in expired:
+        _sessions.pop(session_id, None)
+    if len(_sessions) >= _MAX_SESSIONS and sid not in _sessions:
+        oldest = min(_sessions, key=lambda key: _sessions[key].get("last_activity", 0))
+        _sessions.pop(oldest, None)
     if sid not in _sessions:
         _sessions[sid] = {
             "contact_name": None,
@@ -44,7 +61,10 @@ def _get_sess(sid: str) -> dict:
             "awaiting_confirmation": False,
             "collecting_contact": False,
             "current_step": 0,
+            "last_activity": now,
+            "completed_actions": {},
         }
+    _sessions[sid]["last_activity"] = now
     return _sessions[sid]
 
 
@@ -52,20 +72,36 @@ def _all_collected(sess: dict) -> bool:
     return bool(sess.get("contact_name") and sess.get("contact_email") and sess.get("contact_phone"))
 
 
-def _fill_step(sess: dict, value: str):
+def _action_key(action_type: str, pending: dict) -> str:
+    payload = json.dumps(
+        {"type": action_type, "data": pending.get("data", {})},
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _fill_step(sess: dict, value: str) -> tuple[bool, str | None]:
     step_idx = sess.get("current_step", 0)
     if step_idx >= len(CONTACT_STEPS):
-        return
+        return False, "Contact collection is already complete."
     field, _ = CONTACT_STEPS[step_idx]
     if field == "contact_email":
-        m = _EMAIL_RE.search(value)
-        sess[field] = m.group(0) if m else value.strip()
+        email = extract_email(value)
+        if not email:
+            return False, "Please enter a valid email address, for example **name@company.com**."
+        sess[field] = email
     elif field == "contact_phone":
-        m = _PHONE_RE.search(value)
-        sess[field] = m.group(0).strip() if m else value.strip()
+        phone = extract_phone(value)
+        if not phone:
+            return False, "Please enter a valid phone number containing 7 to 15 digits."
+        sess[field] = phone
     else:
-        sess[field] = value.strip()
+        if not is_valid_contact_name(value):
+            return False, "Please enter your name using letters only."
+        sess[field] = " ".join(part.capitalize() for part in value.strip().split())
     sess["current_step"] = step_idx + 1
+    return True, None
 
 
 class ChatRequest(BaseModel):
@@ -101,44 +137,22 @@ async def chat(
     msg = request.message.strip()
     msg_lower = msg.lower()
 
-    # Step 0: Strict ITSM Guardrail & Bad Intent Check (ALWAYS HIGHEST PRIORITY)
-    for pattern in _BAD_INTENT_PATTERNS:
-        if re.search(pattern, msg_lower, re.IGNORECASE):
-            # Reset any contact collection state
-            sess["collecting_contact"] = False
-            sess["pending_ticket_query"] = None
-            sess["awaiting_confirmation"] = False
-            
-            refusal_msg = (
-                "🛡️ **Out of Scope Request**\n\n"
-                "I am **Bobby**, the AI Service Management Assistant at Inspired Pet Nutrition, "
-                "dedicated strictly to **IT Systems and Workplace Technology Support**.\n\n"
-                "I cannot create tickets or assist with personal belongings, facility complaints, "
-                "lifestyle, or non-IT requests.\n\n"
-                "I am ready to help you with **ITSM cases only**, including:\n\n"
-                "• 🔑 **Account & Access:** Password resets, MFA token resets & domain unlocks\n"
-                "• 🌐 **Network & Connectivity:** Corporate VPN, Wi-Fi 802.1X & DNS issues\n"
-                "• 💻 **Workplace Hardware:** Laptops, 4K monitors, docking stations & accessories\n"
-                "• 📊 **Enterprise Software:** Microsoft 365, Teams, Outlook & Dynamics 365 ERP\n"
-                "• 🎫 **ITSM Ticketing:** Raising, tracking, and resolving IT service requests\n\n"
-                "👉 *Please provide your inquiry or concern related to our ITSM cases only.*"
-            )
-            return {
-                "session_id": request.session_id,
-                "message": refusal_msg,
-                "intent": "guardrail_refusal",
-                "escalated": False,
-                "contact_info": {
-                    "name": sess.get("contact_name"),
-                    "email": sess.get("contact_email"),
-                    "phone": sess.get("contact_phone"),
-                    "collected": False,
-                },
-            }
+    # Allow users to correct previously supplied contact details at any point.
+    corrected_email = extract_email(msg)
+    corrected_phone = extract_phone(msg)
+    if corrected_email and ("email" in msg_lower or "actually" in msg_lower or "correction" in msg_lower):
+        sess["contact_email"] = corrected_email
+    if corrected_phone and ("phone" in msg_lower or "mobile" in msg_lower or "actually" in msg_lower):
+        sess["contact_phone"] = corrected_phone
+
+    # Step 0: interruptions bypass HTTP workflow collection but continue into
+    # LangGraph so the turn is included in checkpointed conversation history.
+    message_scope = classify_scope(msg)
+    is_interruption = is_workflow_interruption(msg, sess, scope=message_scope)
 
     # Phase 1: Awaiting confirmation
-    if sess.get("awaiting_confirmation"):
-        if msg_lower in _CONFIRM_WORDS:
+    if sess.get("awaiting_confirmation") and not is_interruption:
+        if msg_lower in CONFIRM_WORDS:
             sess["awaiting_confirmation"] = False
             sess["collecting_contact"] = True
             sess["current_step"] = 0
@@ -153,15 +167,23 @@ async def chat(
             sess["awaiting_confirmation"] = False
 
     # Check if user message is an explicit ticket creation request
-    is_ticket_intent = any(t in msg_lower for t in (
-        "create ticket", "raise ticket", "log ticket", "open ticket", "submit ticket",
-        "create a ticket", "raise a ticket", "log a ticket", "open a ticket", "new ticket",
-        "ticket for", "create account", "onboard", "hardware request"
-    ))
+    is_ticket_intent = is_explicit_ticket_request(msg_lower)
 
     # Phase 2: Contact Collection State Machine
-    if sess.get("collecting_contact"):
-        _fill_step(sess, msg)
+    if sess.get("collecting_contact") and not is_interruption:
+        valid, validation_error = _fill_step(sess, msg)
+        if not valid:
+            return {
+                "session_id": request.session_id,
+                "message": f"⚠️ {validation_error}",
+                "intent": "create_ticket",
+                "contact_info": {
+                    "name": sess.get("contact_name"),
+                    "email": sess.get("contact_email"),
+                    "phone": sess.get("contact_phone"),
+                    "collected": False,
+                },
+            }
         if not _all_collected(sess):
             step_idx = sess.get("current_step", 0)
             if step_idx < len(CONTACT_STEPS):
@@ -187,12 +209,12 @@ async def chat(
 
     elif is_ticket_intent and not _all_collected(sess):
         # Auto-extract if provided in one-shot text (e.g. "My name is Mark, email mark@ipn.co.uk")
-        em = _EMAIL_RE.search(msg)
-        if em:
-            sess["contact_email"] = em.group(0)
-        pm = _PHONE_RE.search(msg)
-        if pm and any(c.isdigit() for c in pm.group(0)) and len(pm.group(0).strip()) >= 7:
-            sess["contact_phone"] = pm.group(0).strip()
+        email = extract_email(msg)
+        if email:
+            sess["contact_email"] = email
+        phone = extract_phone(msg)
+        if phone:
+            sess["contact_phone"] = phone
 
         if not _all_collected(sess):
             sess["pending_ticket_query"] = msg
@@ -233,6 +255,7 @@ async def chat(
         "contact_phone": sess.get("contact_phone"),
         "user_time_greeting": request.local_time_greeting,
         "contact_info_collected": _all_collected(sess),
+        "scope": message_scope,
         "escalated": False,
         "needs_human_approval": False,
         "human_approved": None,
@@ -304,6 +327,7 @@ async def resume_approval(
         pending = state.get("pending_action", {})
         ticket_id = state.get("ticket_id")
         action_type = pending.get("type", "")
+        action_key = _action_key(action_type, pending)
 
         if not request.approved:
             return {
@@ -311,6 +335,11 @@ async def resume_approval(
                 "message": "Okay, action cancelled. Is there anything else I can help you with?",
                 "approved": False,
             }
+
+        completed = sess.setdefault("completed_actions", {}).get(action_key)
+        if completed:
+            logger.info("approve.idempotent_replay", action_type=action_type)
+            return completed
 
         logger.info("approve.executing", action_type=action_type, ticket_id=ticket_id)
 
@@ -329,7 +358,7 @@ async def resume_approval(
                 f"**Expected wait time:** 15 minutes\n\n"
                 f"An email confirmation will be sent to **{contact_email}**"
             )
-            return {
+            response = {
                 "session_id": request.session_id,
                 "message": msg,
                 "approved": True,
@@ -340,6 +369,8 @@ async def resume_approval(
                     "phone": sess.get("contact_phone"),
                 },
             }
+            sess["completed_actions"][action_key] = response
+            return response
 
         if action_type == "create_ticket" and not ticket_id:
             freshdesk = get_freshdesk_client()
@@ -420,7 +451,7 @@ async def resume_approval(
                     f"🤝 **Is there anything else I can help you with today?**"
                 )
 
-                return {
+                response = {
                     "session_id": request.session_id,
                     "message": response_text,
                     "approved": True,
@@ -431,6 +462,8 @@ async def resume_approval(
                         "phone": sess.get("contact_phone"),
                     },
                 }
+                sess["completed_actions"][action_key] = response
+                return response
             except Exception as e:
                 logger.error("approve.create_error", error=str(e))
                 return {
@@ -530,5 +563,3 @@ async def resolve_ticket(
         "email_dispatched_to": target_email,
         "message": f"Ticket #{request.ticket_id} has been marked as Resolved in Freshdesk. Resolution details and CSAT survey were sent to {target_email}."
     }
-
-

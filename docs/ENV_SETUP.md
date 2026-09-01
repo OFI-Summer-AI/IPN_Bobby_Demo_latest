@@ -51,7 +51,7 @@ APP_ENV=production
 **Optional for demo (app works without these):**
 | Variable | What it enables |
 |---|---|
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Real vector search (KB search) |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Supabase KB search (vector RPC when available, ranked lexical fallback otherwise) |
 | `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` | Observability tracing |
 
 If Supabase vars are not set → app falls back to `InMemorySearchClient` (mock KB articles).  
@@ -119,9 +119,12 @@ If `llm_configured: false` → `OPENAI_API_KEY` (demo) or `AZURE_OPENAI_API_KEY`
 
 ---
 
-## Supabase Setup (for KB vector search in demo)
+## Supabase Setup (for KB search in demo)
 
-If you want real knowledge base search instead of the in-memory fallback:
+If you want Supabase knowledge base search instead of the in-memory fallback, configure the
+`itsm_knowledge` table used by lexical search. The optional `match_documents` RPC enables the
+preferred vector-search path; without that RPC, the application continues with ranked lexical
+search and does not require an architecture change.
 
 1. Create a Supabase project at https://supabase.com
 2. Run this SQL in Supabase Studio to create the vector search function:

@@ -92,8 +92,8 @@ The Bobby graph flows through these nodes:
 
 | Node | Trigger | What it does |
 |---|---|---|
-| `triage_node` | Every message | LLM classifies intent, sets confidence |
-| `knowledge_node` | `it_question` intent | Vector search → LLM synthesis |
+| `triage_node` | Every message | Deterministic, context-aware rules classify scope and intent |
+| `knowledge_node` | `it_question` intent | Vector-first search with lexical fallback → grounded LLM/template answer |
 | `ticket_node` | `create_ticket` / `ticket_status` | Slot-filling or Freshdesk lookup |
 | `account_node` | `account_unlock` / `password_reset` | Prepares HITL action |
 | `hitl_node` | Any write action | `interrupt()` — graph pauses for user |
@@ -118,6 +118,15 @@ MemorySaver      →    PostgresSaver (LangGraph checkpoints)
 ```
 
 Zero code changes required to switch — only `.env` changes.
+
+Conversation continuity uses the existing LangGraph `session_id`/thread checkpoint. A rejected or
+out-of-scope turn is handled as a turn-local response and does not replace the last valid active
+intent. The HTTP contact-collection session is bounded to 1,000 entries and expires inactive entries
+after 30 minutes.
+
+Knowledge retrieval prefers the Supabase `match_documents` vector RPC when it is available, then
+falls back to a single relevance-ranked lexical query over `itsm_knowledge`. Production uses Azure
+AI Search with semantic/vector retrieval and a keyword retry when semantic search is unavailable.
 
 ---
 
