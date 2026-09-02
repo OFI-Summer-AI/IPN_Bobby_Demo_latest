@@ -408,17 +408,26 @@ async def resume_approval(
                 priority_icons = {"low": "🟢", "medium": "🟡", "high": "🟠", "urgent": "🔴"}
                 p_icon = priority_icons.get(priority.lower(), "🟡")
 
-                response_text = (
-                    f"🎉 **Ticket #{new_id} Created Successfully!**\n\n"
-                    f"• **Subject:** {subject}\n"
-                    f"• **Priority:** {p_icon} {priority.title()}\n"
-                    f"• **Assigned Specialist:** {assigned_specialist} ({assigned_team})\n"
-                    f"• **Requester:** {recipient_name} (`{target_email}`)\n"
-                    f"• **Status:** ⚡ In Progress (Autonomous Domain Specialist Active)\n\n"
-                    f"📧 *A full confirmation email and private audit note have been dispatched to **{target_email}**.*\n\n"
-                    f"---\n"
-                    f"🤝 **Is there anything else I can help you with today?**"
-                )
+                # FIX: previously each line ended with a single "\n" and the
+                # whole thing was one f-string. The chat widget's markdown
+                # renderer treats a single "\n" inside a paragraph as a soft
+                # break (rendered as a space), so every field ran together on
+                # one line - this is the exact bug from the screenshots.
+                # Joining with "\n\n" (double newline / blank line between
+                # each field) is what makes the Draft card render correctly,
+                # so we use the same pattern here.
+                response_fields = [
+                    f"🎉 **Ticket #{new_id} Created Successfully!**",
+                    f"• **Subject:** {subject}",
+                    f"• **Priority:** {p_icon} {priority.title()}",
+                    f"• **Assigned Specialist:** {assigned_specialist} ({assigned_team})",
+                    f"• **Requester:** {recipient_name} (`{target_email}`)",
+                    f"• **Status:** ⚡ In Progress (Autonomous Domain Specialist Active)",
+                    f"📧 *A full confirmation email and private audit note have been dispatched to **{target_email}**.*",
+                    "---",
+                    "🤝 **Is there anything else I can help you with today?**",
+                ]
+                response_text = "\n\n".join(response_fields)
 
                 return {
                     "session_id": request.session_id,
@@ -530,5 +539,3 @@ async def resolve_ticket(
         "email_dispatched_to": target_email,
         "message": f"Ticket #{request.ticket_id} has been marked as Resolved in Freshdesk. Resolution details and CSAT survey were sent to {target_email}."
     }
-
-

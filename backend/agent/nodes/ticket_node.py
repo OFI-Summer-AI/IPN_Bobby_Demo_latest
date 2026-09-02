@@ -64,6 +64,18 @@ def _is_confirmation(msg: str) -> bool:
     return msg.strip().lower() in _CONFIRMATION_WORDS
 
 
+def _join_fields(*fields: str) -> str:
+    """
+    Joins card fields/lines with DOUBLE newlines so every field renders on
+    its own line. Single "\\n" is treated as a soft break (=space) by the
+    chat widget's markdown renderer, which is what caused the previous
+    "everything on one line" bug on both the draft card and the
+    ticket-created card. Every card-building function in this file should
+    route through this helper so they can't drift out of sync again.
+    """
+    return "\n\n".join(f for f in fields if f)
+
+
 def _smart_classify_from_message(user_message: str) -> dict:
     """Rule-based smart fallback classifier when no LLM available."""
     msg_lower = user_message.lower()
@@ -89,8 +101,7 @@ def _smart_classify_from_message(user_message: str) -> dict:
     # Generate subject from message
     words = user_message.strip().split()
     subject_words = []
-    skip_next = False
-    for i, w in enumerate(words):
+    for w in words:
         if w.lower() in ("i", "want", "to", "raise", "ticket", "for", "please", "can", "you", "a", "an", "the", "as", "am"):
             continue
         subject_words.append(w)
@@ -112,7 +123,15 @@ def _smart_classify_from_message(user_message: str) -> dict:
 
 
 def _format_draft_card(ticket: dict, ticket_number: str = None) -> str:
-    """Formats a clear ticket draft card for user review."""
+    """
+    Formats a clear ticket draft card for user review.
+
+    IMPORTANT: fields are separated with DOUBLE newlines ("\\n\\n"), not single
+    ones. Most chat/markdown renderers treat a single "\\n" inside a paragraph
+    as a soft break (rendered as a space), which is why the previous version
+    collapsed every bullet onto one line. Double newlines force each bullet
+    onto its own line/paragraph.
+    """
     priority_icons = {
         "low": "🟢 Low",
         "medium": "🟡 Medium",
@@ -137,14 +156,14 @@ def _format_draft_card(ticket: dict, ticket_number: str = None) -> str:
 
     header = f"📋 **Ticket Draft #{ticket_number}**" if ticket_number else "📋 **Ticket Draft — Please Review**"
 
-    return (
-        f"{header}\n\n"
-        f"• **Subject:** {subj}\n"
-        f"• **Category:** {c_display}\n"
-        f"• **Priority:** {p_display}\n\n"
-        f"**Description:**\n> {desc}\n\n"
-        f"---\n"
-        f"👉 *Review the details below. Click **Confirm & Submit** to assign a specialist, or **Edit Details** to customize.*"
+    return _join_fields(
+        header,
+        f"• **Subject:** {subj}",
+        f"• **Category:** {c_display}",
+        f"• **Priority:** {p_display}",
+        f"**Description:**\n> {desc}",
+        "---",
+        "👉 *Review the details below. Click **Confirm & Submit** to assign a specialist, or **Edit Details** to customize.*",
     )
 
 
@@ -203,23 +222,25 @@ async def ticket_node(state: TicketState) -> dict:
                     priority_map = {1: "🟢 Low", 2: "🟡 Medium", 3: "🟠 High", 4: "🔴 Urgent (P1)"}
                     priority_str = priority_map.get(t.get("priority"), "Medium")
 
+                    status_card = _join_fields(
+                        f"🎫 **Ticket #{spec_id} Details**",
+                        f"• **Subject:** {t.get('subject')}",
+                        f"• **Status:** *{status_str}*",
+                        f"• **Priority:** {priority_str}",
+                        f"• **Created:** {t.get('created_at', '')[:10]}",
+                        "🤝 *Need to add details or escalate this ticket?*",
+                    )
+
                     return {
                         "ticket_details": {"ticket": t},
-                        "final_response": (
-                            f"🎫 **Ticket #{spec_id} Details**\n\n"
-                            f"• **Subject:** {t.get('subject')}\n"
-                            f"• **Status:** *{status_str}*\n"
-                            f"• **Priority:** {priority_str}\n"
-                            f"• **Created:** {t.get('created_at', '')[:10]}\n\n"
-                            f"🤝 *Need to add details or escalate this ticket?*"
-                        ),
+                        "final_response": status_card,
                     }
                 except Exception:
                     pass
 
             tickets = await freshdesk.get_tickets_by_user(state["user_id"])
             if tickets:
-                ticket_summary = "\n".join([
+                ticket_summary = "\n\n".join([
                     f"🎫 **Ticket #{t['id']}:** {t['subject']} — *{t['status']}*"
                     for t in tickets[:5]
                 ])
@@ -322,17 +343,20 @@ async def ticket_node(state: TicketState) -> dict:
             priority_icons = {"low": "🟢", "medium": "🟡", "high": "🟠", "urgent": "🔴"}
             p_icon = priority_icons.get(proposed_ticket.get("priority", "medium"), "🟡")
 
-            response_text = (
-                f"✅ **Ticket #{new_ticket_id} created successfully!**\n\n"
-                f"**{proposed_ticket['subject']}**\n\n"
-                f"| | |\n|---|---|\n"
-                f"| 🎫 **Ticket ID** | #{new_ticket_id} |\n"
-                f"| {p_icon} **Priority** | {proposed_ticket['priority'].title()} |\n"
-                f"| 👤 **Assigned to** | {assigned_specialist} — {assigned_team} |\n"
-                f"| 📧 **Updates sent to** | {contact_email} |\n\n"
-                f"📬 You'll receive an email confirmation shortly.\n"
-                f"Is there anything else I can help you with?"
+            # Matches the draft card's bullet style ("• **Label:** value") so
+            # both cards look visually consistent, still joined with the
+            # double-newline _join_fields helper so each line renders
+            # separately.
+            response_text = _join_fields(
+                f"🎉 **Ticket #{new_ticket_id} Created Successfully!**",
+                f"• **Subject:** {proposed_ticket['subject']}",
+                f"• **Priority:** {p_icon} {proposed_ticket['priority'].title()}",
+                f"• **Assigned Specialist:** {assigned_specialist} ({assigned_team})",
+                f"• **Updates sent to:** {contact_email}",
+                "📬 *You'll receive an email confirmation shortly.*",
+                "🤝 Is there anything else I can help you with today?",
             )
+
             return {
                 "ticket_id": new_ticket_id,
                 "final_response": response_text,
